@@ -712,6 +712,43 @@ class Commands:
         return {'max': value}
 
     @command('')
+    def create_from_seed(self, seed, password=None):
+        """Create a new wallet from an existing seed"""
+        print_error('create_from_seed')
+        print_error(str(password))
+        print_error(str(seed))
+        return self._create(seed, password)
+
+    @command('')
+    def create_new(self, password=None):
+        """Create a new wallet"""
+        print_error('create_new')
+        print_error(str(password))
+        return self._create(None, password)
+
+    def _create(self, seed=None, password=None):
+        import os
+        from electrum import keystore
+        from electrum.mnemonic import Mnemonic
+        from electrum import SimpleConfig
+        from electrum.storage import WalletStorage
+        from electrum.wallet import Wallet
+
+        seed_type = 'standard'
+        if seed is None:
+            seed = Mnemonic('en').make_seed(seed_type)
+        k = keystore.from_seed(seed, '', False)
+        storage = WalletStorage(self.config.get_wallet_path())
+        storage.put('keystore', k.dump())
+        storage.put('wallet_type', 'standard')
+        wallet = Wallet(storage)
+        wallet.update_password(None, password, True)
+        wallet.synchronize()
+        print_error("Your wallet generation seed is:\n\"%s\"" % seed)
+        print_error("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        return {'seed': seed}
+
+    @command('')
     def help(self):
         # for the python console
         return sorted(known_commands.keys())
