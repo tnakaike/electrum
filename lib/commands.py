@@ -700,6 +700,17 @@ class Commands:
         to config settings (static/dynamic)"""
         return self.config.fee_per_kb()
 
+    @command('wp')
+    def getmax(self, destination, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None):
+        """Get the max amount that can be sent. """
+        amount = '!'
+        tx_fee = satoshis(fee)
+        domain = from_addr.split(',') if from_addr else None
+        tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, True, rbf, password, locktime)
+        address, amount = tx.get_outputs()[0]
+        value = float(amount) / COIN
+        return {'max': value}
+
     @command('')
     def help(self):
         # for the python console
