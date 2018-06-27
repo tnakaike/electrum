@@ -460,7 +460,45 @@ class Commands:
             from .exchange_rate import FxThread
             fx = FxThread(self.config, None)
             kwargs['fx'] = fx
-        return json_encode(self.wallet.get_full_history(**kwargs))
+        # return json_encode(self.wallet.get_full_history(**kwargs))
+        balance = 0
+        out = []
+        for item in self.wallet.get_history():
+            tx_hash, height, conf, timestamp, value, balance = item
+            if timestamp:
+                date = datetime.datetime.fromtimestamp(timestamp).isoformat(' ')[:-3]
+            else:
+                date = "----"
+            label = self.wallet.get_label(tx_hash)
+            tx = self.wallet.transactions.get(tx_hash)
+            tx.deserialize()
+            input_addresses = []
+            output_addresses = []
+            for x in tx.inputs():
+                if x['type'] == 'coinbase': continue
+                addr = x.get('address')
+                if addr == None: continue
+                if addr == "(pubkey)":
+                    prevout_hash = x.get('prevout_hash')
+                    prevout_n = x.get('prevout_n')
+                    _addr = self.wallet.find_pay_to_pubkey_address(prevout_hash, prevout_n)
+                    if _addr:
+                        addr = _addr
+                input_addresses.append(addr)
+            for addr, v in tx.get_outputs():
+                output_addresses.append(addr)
+            out.append({
+                'txid': tx_hash,
+                'timestamp': timestamp,
+                'date': date,
+                'input_addresses': input_addresses,
+                'output_addresses': output_addresses,
+                'label': label,
+                'value': float(value)/COIN if value is not None else None,
+                'height': height,
+                'confirmations': conf
+            })
+        return out
 
     @command('w')
     def setlabel(self, key, label):
