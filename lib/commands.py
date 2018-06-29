@@ -734,9 +734,8 @@ class Commands:
         from electrum.storage import WalletStorage
         from electrum.wallet import Wallet
 
-        seed_type = 'standard'
         if seed is None:
-            seed = Mnemonic('en').make_seed(seed_type)
+            seed = Mnemonic('en').make_seed('standard')
         k = keystore.from_seed(seed, '', False)
         storage = WalletStorage(self.config.get_wallet_path())
         storage.put('keystore', k.dump())
@@ -747,6 +746,59 @@ class Commands:
         print_error("Your wallet generation seed is:\n\"%s\"" % seed)
         print_error("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
         return {'seed': seed}
+
+    @command('')
+    def create_multisig_key(self, seed):
+        """Create a seed and a key for a multisig wallet"""
+        import os
+        print_error('create_multisig_key')
+        k = self._create_multisig_key(seed)
+        return {'seed': seed, 'key': k.get_master_public_key()}
+
+    @command('')
+    def create_new_multisig_key(self):
+        """Create a seed and a key for a multisig wallet"""
+        import os
+        from electrum.mnemonic import Mnemonic
+        print_error('create_new_multisig_key')
+        seed = Mnemonic('en').make_seed('standard')
+        k = self._create_multisig_key(seed)
+        return {'seed': seed, 'key': k.get_master_public_key()}
+
+    @command('')
+    def create_multisig_wallet(self, seed, cosignerkey, password=None):
+        """Create a new multisig wallet"""
+        import os
+        from electrum import keystore
+        from electrum.mnemonic import Mnemonic
+        from electrum import SimpleConfig
+        from electrum.storage import WalletStorage
+        from electrum.wallet import Wallet
+        from electrum.wallet import Multisig_Wallet
+        print_error('create_multisig_wallet: cosignerkey=' + cosignerkey)
+        k = self._create_multisig_key(seed)
+        ck = keystore.from_master_key(cosignerkey)
+        storage = WalletStorage(self.config.get_wallet_path())
+        storage.put('x1/', k.dump())
+        storage.put('x2/', ck.dump())
+        storage.put('wallet_type', '2of2')
+        storage.write()
+        wallet = Multisig_Wallet(storage)
+        wallet.update_password(None, password, True)
+        wallet.synchronize()
+        return {'seed': seed, 'key': k.get_master_public_key(), 'cosignerkey': cosignerkey}
+
+    def _create_multisig_key(self, seed=None):
+        import os
+        from electrum import keystore
+        from electrum.mnemonic import Mnemonic
+
+        if seed is None:
+            seed = Mnemonic('en').make_seed('standard')
+        k = keystore.from_seed(seed, '', True)
+        print_error("Your wallet generation seed is:\n\"%s\"" % seed)
+        print_error("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        return k
 
     @command('')
     def help(self):
