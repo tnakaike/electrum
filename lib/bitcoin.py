@@ -90,8 +90,10 @@ def aes_encrypt_with_iv(key, iv, data):
     data = append_PKCS7_padding(data)
     if pyep11:
         pyep11_aes = pyep11.AES(key)
-        e = pyep11_aes.encrypt_with_iv(key, iv, data, e)
-    elif AES:
+        e = pyep11_aes.encrypt_with_iv(key, iv, data)
+        if e is not None:
+            return e
+    if AES:
         e = AES.new(key, AES.MODE_CBC, iv).encrypt(data)
     else:
         aes_cbc = pyaes.AESModeOfOperationCBC(key, iv=iv)
@@ -105,7 +107,12 @@ def aes_decrypt_with_iv(key, iv, data):
     if pyep11:
         pyep11_aes = pyep11.AES(key)
         data = pyep11_aes.decrypt_with_iv(key, iv, data)
-    elif AES:
+        if data is not None:
+            try:
+                return strip_PKCS7_padding(data)
+            except InvalidPadding:
+                raise InvalidPassword()
+    if AES:
         cipher = AES.new(key, AES.MODE_CBC, iv)
         data = cipher.decrypt(data)
     else:
