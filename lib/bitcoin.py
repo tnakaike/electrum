@@ -106,10 +106,10 @@ def aes_decrypt_with_iv(key, iv, data):
     assert_bytes(key, iv, data)
     if pyep11:
         pyep11_aes = pyep11.AES(key)
-        data = pyep11_aes.decrypt_with_iv(key, iv, data)
-        if data is not None:
+        plaindata = pyep11_aes.decrypt_with_iv(key, iv, data)
+        if plaindata is not None:
             try:
-                return strip_PKCS7_padding(data)
+                return strip_PKCS7_padding(plaindata)
             except InvalidPadding:
                 raise InvalidPassword()
     if AES:
