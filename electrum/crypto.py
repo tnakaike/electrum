@@ -40,6 +40,11 @@ try:
 except:
     AES = None
 
+# pyep11 encryption
+try:
+    import pyep11
+except:
+    pyep11 = None
 
 class InvalidPadding(Exception):
     pass
@@ -67,6 +72,11 @@ def strip_PKCS7_padding(data: bytes) -> bytes:
 def aes_encrypt_with_iv(key: bytes, iv: bytes, data: bytes) -> bytes:
     assert_bytes(key, iv, data)
     data = append_PKCS7_padding(data)
+    if pyep11:
+        pyep11_aes = pyep11.AES(key)
+        e = pyep11_aes.encrypt_with_iv(key, iv, data)
+        if e is not None:
+            return e
     if AES:
         e = AES.new(key, AES.MODE_CBC, iv).encrypt(data)
     else:
@@ -78,6 +88,14 @@ def aes_encrypt_with_iv(key: bytes, iv: bytes, data: bytes) -> bytes:
 
 def aes_decrypt_with_iv(key: bytes, iv: bytes, data: bytes) -> bytes:
     assert_bytes(key, iv, data)
+    if pyep11:
+        pyep11_aes = pyep11.AES(key)
+        plaindata = pyep11_aes.decrypt_with_iv(key, iv, data)
+        if plaindata is not None:
+            try:
+                return strip_PKCS7_padding(plaindata)
+            except InvalidPadding:
+                raise InvalidPassword()
     if AES:
         cipher = AES.new(key, AES.MODE_CBC, iv)
         data = cipher.decrypt(data)

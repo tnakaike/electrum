@@ -511,7 +511,45 @@ class Commands:
             from .exchange_rate import FxThread
             fx = FxThread(self.config, None)
             kwargs['fx'] = fx
-        return json_encode(self.wallet.get_full_history(**kwargs))
+        # return json_encode(self.wallet.get_full_history(**kwargs))
+        balance = 0
+        out = []
+        for item in self.wallet.get_history():
+            tx_hash, height, conf, timestamp, value, balance = item
+            if timestamp:
+                date = datetime.datetime.fromtimestamp(timestamp).isoformat(' ')[:-3]
+            else:
+                date = "----"
+            label = self.wallet.get_label(tx_hash)
+            tx = self.wallet.transactions.get(tx_hash)
+            tx.deserialize()
+            input_addresses = []
+            output_addresses = []
+            for x in tx.inputs():
+                if x['type'] == 'coinbase': continue
+                addr = x.get('address')
+                if addr == None: continue
+                if addr == "(pubkey)":
+                    prevout_hash = x.get('prevout_hash')
+                    prevout_n = x.get('prevout_n')
+                    _addr = self.wallet.find_pay_to_pubkey_address(prevout_hash, prevout_n)
+                    if _addr:
+                        addr = _addr
+                input_addresses.append(addr)
+            for addr, v in tx.get_outputs():
+                output_addresses.append(addr)
+            out.append({
+                'txid': tx_hash,
+                'timestamp': timestamp,
+                'date': date,
+                'input_addresses': input_addresses,
+                'output_addresses': output_addresses,
+                'label': label,
+                'value': float(value)/COIN if value is not None else None,
+                'height': height,
+                'confirmations': conf
+            })
+        return out
 
     @command('w')
     def setlabel(self, key, label):
@@ -759,6 +797,106 @@ class Commands:
         return {
             "confirmations": self.wallet.get_tx_height(txid).conf,
         }
+
+    @command('wp')
+    def getmax(self, destination, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None):
+        """Get the max amount that can be sent. """
+        amount = '!'
+        tx_fee = satoshis(fee)
+        domain = from_addr.split(',') if from_addr else None
+        tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, True, rbf, password, locktime)
+        address, amount = tx.get_outputs()[0]
+        value = float(amount) / COIN
+        return {'max': value}
+
+    @command('')
+    def create_from_seed(self, seed, password=None):
+        """Create a new wallet from an existing seed"""
+        print_error('create_from_seed')
+        print_error(str(password))
+        print_error(str(seed))
+        return self._create(seed, password)
+
+    @command('')
+    def create_new(self, password=None):
+        """Create a new wallet"""
+        print_error('create_new')
+        print_error(str(password))
+        return self._create(None, password)
+
+    def _create(self, seed=None, password=None):
+        import os
+        from electrum import keystore
+        from electrum.mnemonic import Mnemonic
+        from electrum import SimpleConfig
+        from electrum.storage import WalletStorage
+        from electrum.wallet import Wallet
+
+        if seed is None:
+            seed = Mnemonic('en').make_seed('standard')
+        k = keystore.from_seed(seed, '', False)
+        storage = WalletStorage(self.config.get_wallet_path())
+        storage.put('keystore', k.dump())
+        storage.put('wallet_type', 'standard')
+        wallet = Wallet(storage)
+        wallet.update_password(None, password, True)
+        wallet.synchronize()
+        print_error("Your wallet generation seed is:\n\"%s\"" % seed)
+        print_error("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        return {'seed': seed}
+
+    @command('')
+    def create_multisig_key(self, seed):
+        """Create a seed and a key for a multisig wallet"""
+        import os
+        print_error('create_multisig_key')
+        k = self._create_multisig_key(seed)
+        return {'seed': seed, 'key': k.get_master_public_key()}
+
+    @command('')
+    def create_new_multisig_key(self):
+        """Create a seed and a key for a multisig wallet"""
+        import os
+        from electrum.mnemonic import Mnemonic
+        print_error('create_new_multisig_key')
+        seed = Mnemonic('en').make_seed('standard')
+        k = self._create_multisig_key(seed)
+        return {'seed': seed, 'key': k.get_master_public_key()}
+
+    @command('')
+    def create_multisig_wallet(self, seed, cosignerkey, password=None):
+        """Create a new multisig wallet"""
+        import os
+        from electrum import keystore
+        from electrum.mnemonic import Mnemonic
+        from electrum import SimpleConfig
+        from electrum.storage import WalletStorage
+        from electrum.wallet import Wallet
+        from electrum.wallet import Multisig_Wallet
+        print_error('create_multisig_wallet: cosignerkey=' + cosignerkey)
+        k = self._create_multisig_key(seed)
+        ck = keystore.from_master_key(cosignerkey)
+        storage = WalletStorage(self.config.get_wallet_path())
+        storage.put('x1/', k.dump())
+        storage.put('x2/', ck.dump())
+        storage.put('wallet_type', '2of2')
+        storage.write()
+        wallet = Multisig_Wallet(storage)
+        wallet.update_password(None, password, True)
+        wallet.synchronize()
+        return {'seed': seed, 'key': k.get_master_public_key(), 'cosignerkey': cosignerkey}
+
+    def _create_multisig_key(self, seed=None):
+        import os
+        from electrum import keystore
+        from electrum.mnemonic import Mnemonic
+
+        if seed is None:
+            seed = Mnemonic('en').make_seed('standard')
+        k = keystore.from_seed(seed, '', True)
+        print_error("Your wallet generation seed is:\n\"%s\"" % seed)
+        print_error("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        return k
 
     @command('')
     def help(self):
