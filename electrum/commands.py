@@ -515,13 +515,13 @@ class Commands:
         balance = 0
         out = []
         for item in self.wallet.get_history():
-            tx_hash, height, conf, timestamp, value, balance = item
-            if timestamp:
-                date = datetime.datetime.fromtimestamp(timestamp).isoformat(' ')[:-3]
+            tx_hash, tx_mined_status, value, balance = item
+            if tx_mined_status.timestamp:
+                date = datetime.datetime.fromtimestamp(tx_mined_status.timestamp).isoformat(' ')[:-3]
             else:
                 date = "----"
             label = self.wallet.get_label(tx_hash)
-            tx = self.wallet.transactions.get(tx_hash)
+            tx = self.wallet.db.get_transaction(tx_hash)
             tx.deserialize()
             input_addresses = []
             output_addresses = []
@@ -536,18 +536,19 @@ class Commands:
                     if _addr:
                         addr = _addr
                 input_addresses.append(addr)
-            for addr, v in tx.get_outputs():
+            for txout in tx.outputs():
+                _type, addr, amount = txout
                 output_addresses.append(addr)
             out.append({
                 'txid': tx_hash,
-                'timestamp': timestamp,
+                'timestamp': tx_mined_status.timestamp,
                 'date': date,
                 'input_addresses': input_addresses,
                 'output_addresses': output_addresses,
                 'label': label,
                 'value': float(value)/COIN if value is not None else None,
-                'height': height,
-                'confirmations': conf
+                'height': tx_mined_status.height,
+                'confirmations': tx_mined_status.conf
             })
         return out
 
@@ -812,16 +813,16 @@ class Commands:
     @command('')
     def create_from_seed(self, seed, password=None):
         """Create a new wallet from an existing seed"""
-        print_error('create_from_seed')
-        print_error(str(password))
-        print_error(str(seed))
+        print('create_from_seed')
+        print(str(password))
+        print(str(seed))
         return self._create(seed, password)
 
     @command('')
     def create_new(self, password=None):
         """Create a new wallet"""
-        print_error('create_new')
-        print_error(str(password))
+        print('create_new')
+        print(str(password))
         return self._create(None, password)
 
     def _create(self, seed=None, password=None):
@@ -841,15 +842,15 @@ class Commands:
         wallet = Wallet(storage)
         wallet.update_password(None, password, True)
         wallet.synchronize()
-        print_error("Your wallet generation seed is:\n\"%s\"" % seed)
-        print_error("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        print("Your wallet generation seed is:\n\"%s\"" % seed)
+        print("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
         return {'seed': seed}
 
     @command('')
     def create_multisig_key(self, seed):
         """Create a seed and a key for a multisig wallet"""
         import os
-        print_error('create_multisig_key')
+        print('create_multisig_key')
         k = self._create_multisig_key(seed)
         return {'seed': seed, 'key': k.get_master_public_key()}
 
@@ -858,7 +859,7 @@ class Commands:
         """Create a seed and a key for a multisig wallet"""
         import os
         from electrum.mnemonic import Mnemonic
-        print_error('create_new_multisig_key')
+        print('create_new_multisig_key')
         seed = Mnemonic('en').make_seed('standard')
         k = self._create_multisig_key(seed)
         return {'seed': seed, 'key': k.get_master_public_key()}
@@ -873,7 +874,7 @@ class Commands:
         from electrum.storage import WalletStorage
         from electrum.wallet import Wallet
         from electrum.wallet import Multisig_Wallet
-        print_error('create_multisig_wallet: cosignerkey=' + cosignerkey)
+        print('create_multisig_wallet: cosignerkey=' + cosignerkey)
         k = self._create_multisig_key(seed)
         ck = keystore.from_master_key(cosignerkey)
         storage = WalletStorage(self.config.get_wallet_path())
@@ -894,8 +895,8 @@ class Commands:
         if seed is None:
             seed = Mnemonic('en').make_seed('standard')
         k = keystore.from_seed(seed, '', True)
-        print_error("Your wallet generation seed is:\n\"%s\"" % seed)
-        print_error("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
+        print("Your wallet generation seed is:\n\"%s\"" % seed)
+        print("Please keep it in a safe place; if you lose it, you will not be able to restore your wallet.")
         return k
 
     @command('')
