@@ -806,7 +806,7 @@ class Commands:
         tx_fee = satoshis(fee)
         domain = from_addr.split(',') if from_addr else None
         tx = self._mktx([(destination, amount)], tx_fee, change_addr, domain, nocheck, True, rbf, password, locktime)
-        address, amount = tx.get_outputs()[0]
+        _type, address, amount = tx.outputs()[0]
         value = float(amount) / COIN
         return {'max': value}
 
